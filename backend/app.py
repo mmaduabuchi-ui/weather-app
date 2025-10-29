@@ -4,16 +4,23 @@ from flask_cors import CORS
 from supabase import create_client, Client
 from dotenv import load_dotenv
 
+# Load environment variables
 load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
 
+# --- Supabase and API setup ---
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY")
+
+# --- ✅ Default root route (Render homepage) ---
+@app.route('/')
+def home():
+    return jsonify({"message": "Weather App Backend is running successfully!"}), 200
 
 # --- 1️⃣ Fetch weather from OpenWeather + Save to Supabase ---
 @app.route('/weather', methods=['GET'])
@@ -64,6 +71,7 @@ def get_weather():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
 # --- 2️⃣ Retrieve all saved weather records from Supabase ---
 @app.route('/history', methods=['GET'])
 def get_history():
@@ -72,6 +80,7 @@ def get_history():
         return jsonify(response.data)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 # --- 3️⃣ Add a new record manually (for testing or custom insert) ---
 @app.route('/history', methods=['POST'])
@@ -83,6 +92,7 @@ def add_weather_record():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
 # --- 4️⃣ Delete a record by ID ---
 @app.route('/history/<int:record_id>', methods=['DELETE'])
 def delete_weather_record(record_id):
@@ -92,17 +102,14 @@ def delete_weather_record(record_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
 # --- 5️⃣ Export all weather history as CSV ---
 @app.route('/export', methods=['GET'])
 def export_csv():
     try:
-        # Fetch all records
         records = supabase.table("weather_requests").select("*").execute().data
-
-        # CSV headers
         headers = ["id", "city", "temperature", "description", "humidity", "wind_speed", "created_at"]
 
-        # Generate CSV in memory
         def generate():
             yield ",".join(headers) + "\n"
             for r in records:
@@ -114,5 +121,8 @@ def export_csv():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
+# --- ✅ Run app ---
 if __name__ == '__main__':
-    app.run(debug=True)
+    # Use host 0.0.0.0 and port 5000 for Render
+    app.run(host='0.0.0.0', port=int(os.getenv("PORT", 5000)), debug=False)
