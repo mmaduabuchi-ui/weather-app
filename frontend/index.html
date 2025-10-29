@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Weather App</title>
+
+    <!-- Leaflet CSS -->
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet/dist/leaflet.css"
+    />
+
+    <style>
+      body {
+        font-family: sans-serif;
+        text-align: center;
+        background: #f0f2f5;
+        margin-top: 40px;
+      }
+      h2 {
+        color: #333;
+      }
+      input {
+        padding: 10px;
+        width: 220px;
+        border-radius: 5px;
+        border: 1px solid #ccc;
+      }
+      button {
+        padding: 10px 16px;
+        margin-left: 5px;
+        border: none;
+        background-color: #007bff;
+        color: white;
+        border-radius: 5px;
+        cursor: pointer;
+      }
+      button:hover {
+        background-color: #0056b3;
+      }
+      #output {
+        margin-top: 20px;
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        display: inline-block;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+      }
+      #history {
+        margin-top: 40px;
+        width: 80%;
+        margin-left: auto;
+        margin-right: auto;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 10px;
+      }
+      th,
+      td {
+        border: 1px solid #ccc;
+        padding: 8px;
+        text-align: center;
+      }
+      th {
+        background: #007bff;
+        color: white;
+      }
+      td button {
+        background: #dc3545;
+        color: white;
+        border: none;
+        padding: 5px 10px;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+      td button:hover {
+        background: #b02a37;
+      }
+      #map {
+        height: 300px;
+        width: 90%;
+        margin: 20px auto;
+        border-radius: 8px;
+      }
+      .forecast-card {
+        background: #fff;
+        padding: 10px;
+        border-radius: 8px;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        width: 120px;
+        text-align: center;
+      }
+      .forecast-container {
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-top: 15px;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>🌦️ Weather App</h2>
+    <input type="text" id="location" placeholder="Enter city name..." />
+    <button onclick="getWeather()">Check Weather</button>
+    <button onclick="getCurrentLocationWeather()">📍 Use My Location</button>
+    <button onclick="exportCSV()">⬇️ Export CSV</button>
+    <button
+      onclick="window.open('https://www.linkedin.com/school/pmaccelerator/', '_blank')"
+    >
+      ℹ️ Info
+    </button>
+    <p>Built by: Ogu Chinanu .M</p>
+
+    <div id="output"></div>
+    <div id="map"></div>
+    <div id="news"></div>
+
+    <div id="history">
+      <h3>📜 Search History</h3>
+      <table id="historyTable">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>City</th>
+            <th>Temp (°C)</th>
+            <th>Description</th>
+            <th>Humidity</th>
+            <th>Wind</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="historyBody"></tbody>
+      </table>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+    <script>
+      const backendUrl = "http://127.0.0.1:5000";
+      let map, marker;
+
+      async function getWeather() {
+        const loc = document.getElementById("location").value.trim();
+        if (!loc) return alert("Please enter a location");
+        try {
+          const res = await fetch(
+            `${backendUrl}/weather?location=${encodeURIComponent(loc)}`
+          );
+          const data = await res.json();
+          if (data.error) {
+            document.getElementById("output").innerHTML = `<p>${data.error}</p>`;
+            return;
+          }
+
+          const temp =
+            data.current?.main?.temp ?? data.temperature ?? "N/A";
+          const desc =
+            data.current?.weather?.[0]?.description ?? data.description ?? "N/A";
+
+          document.getElementById("output").innerHTML = `
+            <h3>City: ${data.city || loc}</h3>
+            <p>Temp: ${temp}°C</p>
+            <p>Condition: ${desc}</p>
+          `;
+
+          showForecast(data.forecast);
+          showMap(data.city || loc);
+          showWeatherNews(data.city || loc);
+          loadHistory();
+        } catch (err) {
+          document.getElementById("output").innerHTML = `<p>Error: ${err}</p>`;
+        }
+      }
+
+      async function getCurrentLocationWeather() {
+        if (!navigator.geolocation) {
+          alert("Geolocation not supported by your browser.");
+          return;
+        }
+        navigator.geolocation.getCurrentPosition(async (pos) => {
+          const { latitude, longitude } = pos.coords;
+          try {
+            const res = await fetch(
+              `${backendUrl}/weather?lat=${latitude}&lon=${longitude}`
+            );
+            const data = await res.json();
+            if (data.error) {
+              document.getElementById("output").innerHTML = `<p>${data.error}</p>`;
+              return;
+            }
+            const temp = data.current?.main?.temp ?? "N/A";
+            const desc =
+              data.current?.weather?.[0]?.description ?? "N/A";
+
+            const geoRes = await fetch(
+              `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`
+            );
+            const geoData = await geoRes.json();
+            const cityName =
+              geoData.address.city ||
+              geoData.address.town ||
+              geoData.address.village ||
+              `${latitude},${longitude}`;
+
+            document.getElementById("output").innerHTML = `
+              <h3>📍 Your Location: ${cityName}</h3>
+              <p>Lat: ${latitude}, Lon: ${longitude}</p>
+              <p>Temp: ${temp}°C</p>
+              <p>Condition: ${desc}</p>
+            `;
+
+            showForecast(data.forecast);
+            showMap([latitude, longitude]);
+            showWeatherNews(cityName);
+            loadHistory();
+          } catch (err) {
+            document.getElementById("output").innerHTML = `<p>Error: ${err}</p>`;
+          }
+        });
+      }
+
+      function showForecast(forecastData) {
+        if (!forecastData || !forecastData.list) return;
+        const container = document.createElement("div");
+        container.className = "forecast-container";
+
+        const daily = forecastData.list.filter((item) =>
+          item.dt_txt.includes("12:00:00")
+        );
+        daily.forEach((item) => {
+          const date = new Date(item.dt_txt).toLocaleDateString();
+          const temp = item.main.temp;
+          const desc = item.weather[0].description;
+
+          const card = document.createElement("div");
+          card.className = "forecast-card";
+          card.innerHTML = `
+            <p><strong>${date}</strong></p>
+            <p>Temp: ${temp}°C</p>
+            <p>${desc}</p>
+          `;
+          container.appendChild(card);
+        });
+
+        document.getElementById("output").appendChild(container);
+      }
+
+      function showMap(location) {
+        if (!map) {
+          map = L.map("map").setView([0, 0], 2);
+          L.tileLayer(
+            "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+            {
+              maxZoom: 19,
+            }
+          ).addTo(map);
+        }
+
+        let lat, lon;
+        if (Array.isArray(location)) {
+          [lat, lon] = location;
+        } else {
+          // Geocode city name to coordinates
+          fetch(
+            `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
+              location
+            )}`
+          )
+            .then((res) => res.json())
+            .then((data) => {
+              if (data && data.length > 0) {
+                lat = data[0].lat;
+                lon = data[0].lon;
+                map.setView([lat, lon], 10);
+                if (marker) map.removeLayer(marker);
+                marker = L.marker([lat, lon]).addTo(map);
+              }
+            });
+          return;
+        }
+
+        map.setView([lat, lon], 10);
+        if (marker) map.removeLayer(marker);
+        marker = L.marker([lat, lon]).addTo(map);
+      }
+
+      async function showWeatherNews(city) {
+        const apiKey = "YOUR_YOUTUBE_API_KEY";
+        try {
+          const res = await fetch(
+            `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(
+              city
+            )}+weather&key=${apiKey}&maxResults=2`
+          );
+          const data = await res.json();
+          const videos = data.items
+            .map(
+              (v) =>
+                `<iframe width="300" height="200" src="https://www.youtube.com/embed/${v.id.videoId}" frameborder="0" allowfullscreen></iframe>`
+            )
+            .join("");
+          document.getElementById("news").innerHTML =
+            `<h3>🎥 Weather News</h3>` + videos;
+        } catch (err) {
+          console.error("YouTube API error", err);
+        }
+      }
+
+      async function loadHistory() {
+        try {
+          const res = await fetch(`${backendUrl}/history`);
+          const data = await res.json();
+          const tbody = document.getElementById("historyBody");
+          tbody.innerHTML = "";
+          data.forEach((record) => {
+            tbody.innerHTML += `
+              <tr>
+                <td>${record.id}</td>
+                <td>${record.city}</td>
+                <td>${record.temperature}</td>
+                <td>${record.description}</td>
+                <td>${record.humidity}</td>
+                <td>${record.wind_speed}</td>
+                <td><button onclick="deleteRecord(${record.id})">Delete</button></td>
+              </tr>
+            `;
+          });
+        } catch (err) {
+          console.error(err);
+        }
+      }
+
+      async function deleteRecord(id) {
+        if (!confirm("Delete this record?")) return;
+        try {
+          const res = await fetch(`${backendUrl}/history/${id}`, {
+            method: "DELETE",
+          });
+          const data = await res.json();
+          alert(data.message);
+          loadHistory();
+        } catch {
+          alert("Error deleting record");
+        }
+      }
+
+      function exportCSV() {
+        window.location.href = `${backendUrl}/export`;
+      }
+
+      loadHistory();
+    </script>
+  </body>
+</html>
