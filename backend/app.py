@@ -8,7 +8,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app)
+
+# ✅ Allow only your Vercel frontend to access the backend
+CORS(app, origins=["https://weather-app-8bji.vercel.app"])
 
 # --- Supabase and API setup ---
 SUPABASE_URL = os.getenv("SUPABASE_URL")
@@ -22,6 +24,7 @@ OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY")
 def home():
     return jsonify({"message": "Weather App Backend is running successfully!"}), 200
 
+
 # --- 1️⃣ Fetch weather from OpenWeather + Save to Supabase ---
 @app.route('/weather', methods=['GET'])
 def get_weather():
@@ -33,17 +36,17 @@ def get_weather():
         return jsonify({"error": "Location (city) or coordinates (lat, lon) required"}), 400
 
     try:
-        # Build URLs
+        # ✅ Always use HTTPS
         if lat and lon:
-            weather_url = f"http://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={OPENWEATHER_API_KEY}&units=metric"
-            forecast_url = f"http://api.openweathermap.org/data/2.5/forecast?lat={lat}&lon={lon}&appid={OPENWEATHER_API_KEY}&units=metric"
+            weather_url = f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={OPENWEATHER_API_KEY}&units=metric"
+            forecast_url = f"https://api.openweathermap.org/data/2.5/forecast?lat={lat}&lon={lon}&appid={OPENWEATHER_API_KEY}&units=metric"
         else:
-            weather_url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={OPENWEATHER_API_KEY}&units=metric"
-            forecast_url = f"http://api.openweathermap.org/data/2.5/forecast?q={city}&appid={OPENWEATHER_API_KEY}&units=metric"
+            weather_url = f"https://api.openweathermap.org/data/2.5/weather?q={city}&appid={OPENWEATHER_API_KEY}&units=metric"
+            forecast_url = f"https://api.openweathermap.org/data/2.5/forecast?q={city}&appid={OPENWEATHER_API_KEY}&units=metric"
 
-        # Fetch data
-        weather_response = requests.get(weather_url).json()
-        forecast_response = requests.get(forecast_url).json()
+        # Fetch data from OpenWeather
+        weather_response = requests.get(weather_url, timeout=10).json()
+        forecast_response = requests.get(forecast_url, timeout=10).json()
 
         # Safely extract fields
         temperature = weather_response.get("main", {}).get("temp", "N/A")
@@ -52,7 +55,7 @@ def get_weather():
         wind_speed = weather_response.get("wind", {}).get("speed", "N/A")
         city_name = weather_response.get("name") or city or f"{lat},{lon}"
 
-        # Save to Supabase only if temperature exists
+        # Save to Supabase if data valid
         if temperature != "N/A":
             supabase.table("weather_requests").insert({
                 "city": city_name,
@@ -82,7 +85,7 @@ def get_history():
         return jsonify({"error": str(e)}), 500
 
 
-# --- 3️⃣ Add a new record manually (for testing or custom insert) ---
+# --- 3️⃣ Add a new record manually (optional) ---
 @app.route('/history', methods=['POST'])
 def add_weather_record():
     try:

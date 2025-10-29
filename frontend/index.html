@@ -141,7 +141,9 @@
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
     <script>
-      const backendUrl = "http://127.0.0.1:5000";
+      // ✅ UPDATED TO YOUR LIVE RENDER BACKEND
+      const backendUrl = "https://weather-app-y7nq.onrender.com";
+
       let map, marker;
 
       async function getWeather() {
@@ -157,8 +159,7 @@
             return;
           }
 
-          const temp =
-            data.current?.main?.temp ?? data.temperature ?? "N/A";
+          const temp = data.current?.main?.temp ?? data.temperature ?? "N/A";
           const desc =
             data.current?.weather?.[0]?.description ?? data.description ?? "N/A";
 
@@ -194,8 +195,7 @@
               return;
             }
             const temp = data.current?.main?.temp ?? "N/A";
-            const desc =
-              data.current?.weather?.[0]?.description ?? "N/A";
+            const desc = data.current?.weather?.[0]?.description ?? "N/A";
 
             const geoRes = await fetch(
               `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`
@@ -253,19 +253,15 @@
       function showMap(location) {
         if (!map) {
           map = L.map("map").setView([0, 0], 2);
-          L.tileLayer(
-            "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-            {
-              maxZoom: 19,
-            }
-          ).addTo(map);
+          L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            maxZoom: 19,
+          }).addTo(map);
         }
 
         let lat, lon;
         if (Array.isArray(location)) {
           [lat, lon] = location;
         } else {
-          // Geocode city name to coordinates
           fetch(
             `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
               location
